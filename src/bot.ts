@@ -63,8 +63,9 @@ class DiscordBot {
       );
     });
 
-    this.client.on("messageCreate", async (message) => {
-      if (message.author.bot) return;
+ 
+  if (message.author.id === this.client.user?.id) return; 
+
 
       const isMentioned = message.mentions.has(this.client.user!);
       const isKeywordTriggered =

@@ -14,7 +14,7 @@ import DifyChatClient from "./dify-client/dify-client";
 import { DifyFile, ThoughtItem, VisionFile } from "./dify-client/dify.types";
 
 dotenv.config();
-const conversationCache = new Map<string, string>();
+const conversationCache = new Map<string, number>();
 
 class DiscordBot {
   private client: Client;
@@ -233,6 +233,22 @@ class DiscordBot {
 
   private async handleChatMessage(message: Message) {
     const cacheKey = this.getCacheKey(message.author.id, message.channelId);
+    const channelId = message.channelId;
+
+    // 1. 檢查與計算對話次數
+    const currentCount = counterCache.get(channelId) || 0;
+    const MAX_TALK_LIMIT = 8; // 👈 這裡可以設定你想讓它們聊幾次（例如 5 ~ 10 次）
+
+    if (currentCount >= MAX_TALK_LIMIT) {
+      // 超過次數了，清除快取，機器人閉嘴不再回應
+      conversationCache.delete(cacheKey);
+      counterCache.delete(channelId);
+      await message.channel.send("🛑 【系統提示】對話次數已達上限，AI 交流自動結束。");
+      return;
+    }
+
+    // 次數還沒到，幫計數器 +1
+    counterCache.set(channelId, currentCount + 1);
 
     if (message.channel.type !== ChannelType.GroupDM) {
       message.channel.sendTyping().catch(console.error);
@@ -264,6 +280,21 @@ class DiscordBot {
           },
         }
       );
+
+      // 如果這是最後一次對話，順便提醒一下
+      this.sendChatnswer(message, messages, files);
+      if (currentCount + 1 === MAX_TALK_LIMIT - 1) {
+        await message.channel.send(`⚠️ 提示：下一句將是最後一次對話。 (目前: ${currentCount + 1}/${MAX_TALK_LIMIT})`);
+      }
+      
+    } catch (error) {
+      console.error("Error sending message to Dify:", error);
+      await message.reply(
+        "Sorry, something went wrong while generating the answer."
+      );
+    }
+  }
+  
 
       this.sendChatnswer(message, messages, files);
     } catch (error) {

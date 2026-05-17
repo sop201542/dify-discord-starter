@@ -63,20 +63,15 @@ class DiscordBot {
       );
     });
 
-    this.client.on("messageCreate", async (message) => {
-      if (message.author.bot) return;
+    //  這是解鎖版：不看 @，只要頻道有新訊息就觸發！
+this.client.on("messageCreate", async (message) => {
+  // 🛑 唯一一條防線：如果是「自己」講的話，絕對要跳過，否則會自己跟自己死循環！
+  if (message.author.id === this.client.user?.id) return;
 
-      const isMentioned = message.mentions.has(this.client.user!);
-      const isKeywordTriggered =
-        this.MESSAGE_CONTENT_ALLOWED &&
-        this.TRIGGER_KEYWORDS.some((keyword: string) =>
-          message.content.toLowerCase().includes(keyword.toLowerCase())
-        );
+  // 只要不是自己講的（不管人還是其他機器人，也不管有沒有 @），通通直接觸發聊天！
+  await this.handleChatMessage(message);
+});
 
-      if (isMentioned || isKeywordTriggered) {
-        await this.handleChatMessage(message);
-      }
-    });
 
     this.client.on("interactionCreate", async (interaction) => {
       if (!interaction.isCommand()) return;

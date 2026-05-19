@@ -113,7 +113,7 @@ class DiscordBot {
         .setName("chat")
         .setDescription("Chat with the bot in private.")
         .addStringOption((option) =>
-          option.setName("message").setDescription("Your message.").setRequired(true)
+          option.setName("message").setDescription("Your message.").setRequired(true))
         .toJSON(),
       new SlashCommandBuilder()
         .setName("new-conversation")

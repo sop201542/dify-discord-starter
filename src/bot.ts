@@ -17,7 +17,7 @@ dotenv.config();
 const conversationCache = new Map<string, string>();
 const counterCache = new Map<string, number>();
 
-// 【新增】用來暫存前兩次對話內容的記憶庫，方便第 3 次進行整合
+// 用來暫存前兩次對話內容的記憶庫，方便第 3 次進行整合
 const summaryCache = new Map<string, string[]>();
 
 class DiscordBot {
@@ -113,7 +113,8 @@ class DiscordBot {
         .setName("chat")
         .setDescription("Chat with the bot in private.")
         .addStringOption((option) =>
-          option.setName("message").setDescription("Your message.").setRequired(true))
+          option.setName("message").setDescription("Your message.").setRequired(true)
+        )
         .toJSON(),
       new SlashCommandBuilder()
         .setName("new-conversation")
@@ -139,7 +140,7 @@ class DiscordBot {
           inputs: {
             username: interaction.user.globalName || interaction.user.username,
             now: new Date().toUTCString(),
-            history_summary: "", // 指令預設留空
+            history_summary: "",
           },
           query: message.value! as string,
           response_mode: "streaming",
@@ -172,19 +173,22 @@ class DiscordBot {
     }
   }
 
-  // 🔥 【核心修改】每 2 次對話進行整合的 handleChatMessage
+  // 每 2 次對話進行整合的 handleChatMessage
   private async handleChatMessage(message: Message) {
     const cacheKey = this.getCacheKey(message.author.id, message.channelId);
     const channelId = message.channelId;
 
+    // 轉型為 any，繞過 Discord.js 對 PartialGroupDMChannel 的 send 屬性嚴格編譯檢查
+    const textChannel = message.channel as any; 
+
     const currentCount = counterCache.get(channelId) || 0;
-    const MAX_TALK_LIMIT = 8; // 總對話上限依舊是 8 次
+    const MAX_TALK_LIMIT = 8; // 總對話上限為 8 次
 
     if (currentCount >= MAX_TALK_LIMIT) {
       conversationCache.delete(cacheKey);
       counterCache.delete(channelId);
       summaryCache.delete(channelId); // 清除暫存
-      await message.channel.send("🛑 **【系統提示】對話次數已達上限，AI 交流自動結束。**");
+      await textChannel.send("🛑 **【系統提示】對話次數已達上限，AI 交流自動結束。**").catch(console.error);
       return;
     }
 
@@ -213,10 +217,8 @@ class DiscordBot {
           inputs: {
             username: message.author.globalName || message.author.username,
             now: new Date().toUTCString(),
-            // 將整合指令透過 inputs 或附加到 query 裡送給 Dify
             history_summary: summaryPrompt 
           },
-          // 將系統整合提示悄悄塞在 query 後面，強迫 DeepSeek 看一遍
           query: message.content.replace(`<@${this.client.user?.id}>`, "") + (summaryPrompt ? `\n\n${summaryPrompt}` : ""),
           response_mode: "streaming",
           conversation_id: (cacheKey && conversationCache.get(cacheKey)) || "",
@@ -244,13 +246,12 @@ class DiscordBot {
 
       this.sendChatnswer(message, messages, files);
 
-      // 如果剛剛進行了整合，在 Discord 提示一下
       if (summaryPrompt) {
-        await message.channel.send(`🔄 *[系統提示：已將前 2 次對話進行摘要整合並注入給 AI]*`);
+        await textChannel.send(`🔄 *[系統提示：已將前 2 次對話進行摘要整合並注入給 AI]*`).catch(console.error);
       }
 
       if (currentCount + 1 === MAX_TALK_LIMIT - 1) {
-        await message.channel.send(`⚠️ *提示：下一句將是最後一次對話。 (目前進度: ${currentCount + 1}/${MAX_TALK_LIMIT})*`);
+        await textChannel.send(`⚠️ *提示：下一句將是最後一次對話。 (目前進度: ${currentCount + 1}/${MAX_TALK_LIMIT})*`).catch(console.error);
       }
 
     } catch (error) {
